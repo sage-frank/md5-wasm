@@ -1,12 +1,16 @@
 use wasm_bindgen::prelude::*;
-use md5::{Context, Digest};
+use md5::Context;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering}; // 引入原子操作
 
-// 存储多个哈希计算器的全局状态
+// 使用全局自增计数器代替随机数，彻底杜绝 ID 碰撞
+static COUNTER: AtomicU32 = AtomicU32::new(1);
+
 thread_local! {
     static HASHERS: RefCell<HashMap<u32, Context>> = RefCell::new(HashMap::new());
 }
+
 
 #[wasm_bindgen]
 pub fn calculate_md5(data: &[u8]) -> String {
@@ -17,7 +21,8 @@ pub fn calculate_md5(data: &[u8]) -> String {
 // 创建一个新的流式MD5计算器
 #[wasm_bindgen]
 pub fn create_md5_hasher() -> u32 {
-    let id = (js_sys::Math::random() * 1000000.0) as u32;
+    // 每次调用自增 1，保证全局唯一
+    let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     HASHERS.with(|hashers| {
         hashers.borrow_mut().insert(id, Context::new());
     });
@@ -36,6 +41,8 @@ pub fn update_md5_hasher(id: u32, data: &[u8]) -> bool {
         }
     })
 }
+
+
 
 // 完成计算并获取最终的MD5值
 #[wasm_bindgen]
